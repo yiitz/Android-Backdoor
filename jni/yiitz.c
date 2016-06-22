@@ -11,8 +11,10 @@
 #include <netdb.h>
 
 int download(const char *remote,const char *local);
-const char* update_script = "./xrhupdate.sh";
-const char* version_file = "./xrhversion";
+const char *update_script = "./xrhupdate.sh";
+const char *version_file = "./xrhversion";
+const char *server_name = "kuanglizhong.com";
+
 int main(int argc, char *argv[])
 {
 	int r;
@@ -39,20 +41,6 @@ int main(int argc, char *argv[])
 			r = download(buf,update_script);
 			if(0 == r){
 				printf("new version:%d download ok.\n",version+1);
-				
-				/*
-				if (fork() == 0){
-					//child process
-					if(execl("/system/bin/sh",update_script,NULL)<0)
-					{
-						perror("error on execl.\n");
-						exit(0);
-					}
-				}else{
-					//parent process  
-					wait(&childpid);  
-				}
-				*/
 				chmod(update_script,S_IRUSR|S_IWUSR|S_IXUSR);
 				r = system(update_script);
 				if(0 != r)
@@ -82,14 +70,16 @@ int download(const char *remote,const char *local)
 	int result = 0;
 	
     if( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-    printf("create socket error: %s(errno: %d).\n", strerror(errno),errno);
-    return -1;
+		printf("create socket error: %s(errno: %d).\n", strerror(errno),errno);
+		return -1;
     }
-	if ((nlp_host=gethostbyname("kuanglizhong.com"))==NULL){
+	
+	if ((nlp_host = gethostbyname(server_name)) == NULL){
 		printf("resolve error!\n");
-	result = -1;
+		result = -1;
         goto download_end;
 	}
+	
     memset(&servaddr, 0, sizeof(servaddr));
 	memcpy(&servaddr.sin_addr, nlp_host->h_addr_list[0], nlp_host->h_length);
     servaddr.sin_family = AF_INET;
@@ -105,15 +95,15 @@ int download(const char *remote,const char *local)
     strcat(recv_buf,":");
 	if( send(sockfd, recv_buf, strlen(recv_buf), 0) < 0)
     {
-    printf("send msg error: %s(errno: %d).\n", strerror(errno), errno);
-	result = -1;
+		printf("send msg error: %s(errno: %d).\n", strerror(errno), errno);
+		result = -1;
         goto download_end;
     }
 	
 	len = recv(sockfd, recv_buf, 4, 0);
 	if(len != 4){
         printf("receive size error, len:%d.\n",len);
-	result = -1;
+		result = -1;
         goto download_end;
 	}
 	
@@ -121,7 +111,7 @@ int download(const char *remote,const char *local)
 	
 	if(1234567 == size){
         printf("error,file not found.\n");
-	result = -2;
+		result = -2;
         goto download_end;
 	}
     printf("file size %d.\n", size);
@@ -129,22 +119,25 @@ int download(const char *remote,const char *local)
 	if((localfp=fopen(local,"wb"))==NULL)
     {
         printf("cannot open file.\n");
-	result = -1;
+		result = -1;
         goto download_end;
     }
 	receive_size = 0;
 	while(1){
 		len = recv(sockfd, recv_buf, sizeof(recv_buf), 0);
+		
 		if(len < 0){
 			break;
 		}
+		
 		receive_size += len;
 		if(1 != fwrite(recv_buf,len,1,localfp)){
-        printf("write file error.\n");
-	result = -1;
-	fclose(localfp);
-        goto download_end;
+			printf("write file error.\n");
+			result = -1;
+			fclose(localfp);
+			goto download_end;
 		}
+		
 		if(receive_size == size){
 			break;
 		}
@@ -154,8 +147,9 @@ int download(const char *remote,const char *local)
     printf("download ok,receive size: %d.\n", receive_size);
 	if(size != receive_size){
         printf("receive error,please delete file.\n");
-	result = -1;
+		result = -1;
 	}
+	
 download_end:
     close(sockfd);
 	return result;
